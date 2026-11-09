@@ -1,0 +1,84 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Permite que os repositorios tech4-* da org facam deploy na AWS via OIDC, sem access key no GitHub
+
+Parameters:
+  GitHubOrg:
+    Type: String
+    Default: Group-Eleven-Fiap
+  CriarProvedorOidc:
+    Type: String
+    Default: 'true'
+    AllowedValues: ['true', 'false']
+    Description: Use false se a conta AWS ja tiver o provedor token.actions.githubusercontent.com
+
+Conditions:
+  DeveCriarProvedor: !Equals [!Ref CriarProvedorOidc, 'true']
+
+Resources:
+  ProvedorGitHub:
+    Type: AWS::IAM::OIDCProvider
+    Condition: DeveCriarProvedor
+    Properties:
+      Url: https://token.actions.githubusercontent.com
+      ClientIdList:
+        - sts.amazonaws.com
+
+  RoleDeployGitHub:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: tech4-github-deploy
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:oidc-provider/token.actions.githubusercontent.com
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+              StringLike:
+                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/tech4-*:ref:refs/heads/main
+      Policies:
+        - PolicyName: deploy-sam
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Sid: ServicosDaAplicacao
+                Effect: Allow
+                Action:
+                  - cloudformation:*
+                  - lambda:*
+                  - sqs:*
+                  - sns:*
+                  - logs:*
+                  - cloudwatch:*
+                  - dynamodb:*
+                  - apigateway:*
+                  - scheduler:*
+                  - events:*
+                Resource: '*'
+              - Sid: ArtefatosSam
+                Effect: Allow
+                Action: s3:*
+                Resource: !Sub arn:${AWS::Partition}:s3:::aws-sam-cli-managed-default-*
+              - Sid: RolesDasFuncoes
+                Effect: Allow
+                Action:
+                  - iam:CreateRole
+                  - iam:DeleteRole
+                  - iam:GetRole
+                  - iam:PassRole
+                  - iam:TagRole
+                  - iam:UntagRole
+                  - iam:PutRolePolicy
+                  - iam:DeleteRolePolicy
+                  - iam:GetRolePolicy
+                  - iam:AttachRolePolicy
+                  - iam:DetachRolePolicy
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/tech4-*
+
+Outputs:
+  RoleDeployArn:
+    Description: Valor da variavel AWS_ROLE_ARN no GitHub
+    Value: !GetAtt RoleDeployGitHub.Arn

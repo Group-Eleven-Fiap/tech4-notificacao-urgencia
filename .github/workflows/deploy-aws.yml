@@ -1,0 +1,47 @@
+
+name: Deploy AWS Lambda
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+
+      - name: Build Maven
+        run: mvn -B clean package
+
+      - name: Configurar credenciais AWS
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::822870181640:role/tech4-github-actions-deploy-role
+          aws-region: us-east-1
+
+      - name: Atualizar Lambda
+        run: |
+          aws lambda update-function-code \
+            --function-name notificacao-urgencia \
+            --zip-file fileb://target/notificacao-urgencia-0.0.1-SNAPSHOT.jar
+
+      - name: Aguardar atualização
+        run: |
+          aws lambda wait function-updated \
+            --function-name notificacao-urgencia

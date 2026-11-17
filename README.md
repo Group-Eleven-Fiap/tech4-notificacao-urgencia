@@ -73,11 +73,13 @@ A função devolve à SQS apenas as mensagens com erro (`ReportBatchItemFailures
 
 ## Integração com a ingestão
 
-Este repositório cria a fila, portanto deve ser implantado primeiro. Na Lambda `ingestao-avaliacao`, é preciso:
+Este repositório cria a fila, portanto deve ser implantado primeiro. O `template.yaml` do [tech4-ingestao-avaliacao](https://github.com/Group-Eleven-Fiap/tech4-ingestao-avaliacao) importa os dois valores exportados aqui:
 
-1. Definir `SQS_QUEUE_URL` com o output `FilaNotificacoesCriticasUrl`. Com SAM: `!ImportValue tech4-filas-notificacoes-criticas-url`. Sem essa variável, a ingestão tenta publicar em `localhost` e a notificação não acontece.
-2. Conceder `sqs:SendMessage` à role da função, no ARN exportado como `tech4-filas-notificacoes-criticas-arn`.
-3. Implantar na mesma conta e na região `us-east-1`.
+1. `SQS_QUEUE_URL` da Lambda `ingestao-avaliacao` recebe `!ImportValue tech4-filas-notificacoes-criticas-url` (output `FilaNotificacoesCriticasUrl`). Sem essa variável, a ingestão não inicia.
+2. A role da função recebe `sqs:SendMessage` no ARN exportado como `tech4-filas-notificacoes-criticas-arn`.
+3. Os dois stacks devem estar na mesma conta e na região `us-east-1`.
+
+Se a ingestão for implantada antes deste stack, o deploy falha porque os exports ainda não existem.
 
 ## Configuração
 

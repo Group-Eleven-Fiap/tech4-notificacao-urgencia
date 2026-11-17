@@ -5,6 +5,12 @@ Parameters:
   GitHubOrg:
     Type: String
     Default: Group-Eleven-Fiap
+  GitHubOrgId:
+    Type: String
+    Default: '266314743'
+    Description: >-
+      ID numerico da organizacao (gh api orgs/<org> --jq .id). Repositorios novos usam o subject
+      imutavel do GitHub, no formato repo:<org>@<id-da-org>/<repo>@<id-do-repo>
   CriarProvedorOidc:
     Type: String
     Default: 'true'
@@ -38,7 +44,10 @@ Resources:
               StringEquals:
                 token.actions.githubusercontent.com:aud: sts.amazonaws.com
               StringLike:
-                token.actions.githubusercontent.com:sub: !Sub repo:${GitHubOrg}/tech4-*:ref:refs/heads/main
+                token.actions.githubusercontent.com:sub:
+                  # Subject imutavel (repositorios novos) e o formato antigo, apenas da branch main
+                  - !Sub repo:${GitHubOrg}@${GitHubOrgId}/tech4-*:ref:refs/heads/main
+                  - !Sub repo:${GitHubOrg}/tech4-*:ref:refs/heads/main
       Policies:
         - PolicyName: deploy-sam
           PolicyDocument:

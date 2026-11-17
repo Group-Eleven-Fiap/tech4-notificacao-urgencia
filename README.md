@@ -27,6 +27,14 @@ NotificacaoService ──► SesEmailService ──► Amazon SES ──► e-ma
 | CloudWatch + X-Ray | Logs, métricas, alarmes, dashboard e rastreamento. |
 | AWS SAM + GitHub Actions | Infraestrutura como código e deploy automatizado. |
 
+Este repositório faz parte de uma solução com três serviços, implantados nesta ordem:
+
+| Ordem | Repositório | Responsabilidade |
+|-------|-------------|------------------|
+| 1 | **tech4-notificacao-urgencia** (este) | Criar a fila e enviar o e-mail de aviso quando a avaliação é crítica. |
+| 2 | [tech4-ingestao-avaliacao](https://github.com/Group-Eleven-Fiap/tech4-ingestao-avaliacao) | Receber, validar, classificar e gravar a avaliação; publicar na fila as críticas. |
+| 3 | [tech4-relatorio-semanal](https://github.com/Group-Eleven-Fiap/tech4-relatorio-semanal) | Enviar o relatório semanal com média e quantidades. |
+
 ## Documentação da função
 
 **Responsabilidade única:** transformar uma mensagem de avaliação crítica em um e-mail ao administrador. Não grava dados, não calcula urgência e não gera relatório.
@@ -87,7 +95,7 @@ Se a ingestão for implantada antes deste stack, o deploy falha porque os export
 |----------|-----|-------------|
 | `ADMIN_EMAIL` | Destinatário do e-mail. | Sim |
 | `EMAIL_REMETENTE` | Remetente, verificado no SES. | Sim |
-| `AWS_ENDPOINT_URL` | Endpoint alternativo, usado com o LocalStack. | Não |
+| `AWS_ENDPOINT_URL` | Endpoint alternativo para testes locais. Não é definido na AWS. | Não |
 
 ## Segurança e governança
 
@@ -138,19 +146,29 @@ Pré-requisito: JDK 21.
 
 ```powershell
 .\mvnw.cmd test
+.\mvnw.cmd package
 ```
 
-### Execução local
+São 6 testes unitários: mensagem válida da ingestão, mensagem com JSON inválido ou sem campo obrigatório (só ela é devolvida à fila), falha de envio (a SQS tenta de novo) e envio pelo SES com descrição, urgência e data. Nenhum deles acessa a AWS. Eles rodam no pipeline antes de cada deploy.
+
+## Verificação após o deploy
 
 ```powershell
-docker compose -f docker/docker-compose.yml up -d
-docker compose -f docker/docker-compose.yml exec localstack awslocal ses verify-email-identity --email-address remetente@exemplo.com
+aws cloudformation describe-stacks --stack-name tech4-notificacao-urgencia --region us-east-1 --query "Stacks[0].StackStatus"
+aws logs tail /aws/lambda/notificacao-urgencia --region us-east-1 --since 15m
+aws sqs get-queue-attributes --queue-url <FilaDlqUrl> --attribute-names ApproximateNumberOfMessages --region us-east-1
+```
 
-$env:AWS_ENDPOINT_URL = "http://localhost:4566"
+Para testar o fluxo completo, envie uma avaliação com nota de 0 a 4 pela API do [tech4-ingestao-avaliacao](https://github.com/Group-Eleven-Fiap/tech4-ingestao-avaliacao). O log deve mostrar `notificacao.inicio` e `notificacao.sucesso`, o e-mail chega ao administrador e a DLQ continua vazia (o valor `FilaDlqUrl` é um output do stack).
+
+## Execução local
+
+O `LocalRunner` chama o handler com um evento SQS simulado, sem implantar nada. Ele usa a AWS de verdade, então **envia um e-mail real pelo SES**. Para isso, é preciso ter credenciais da AWS na máquina (por exemplo, `aws login`) e os dois endereços verificados no SES, em `us-east-1`:
+
+```powershell
+$env:AWS_REGION = "us-east-1"
 $env:EMAIL_REMETENTE = "remetente@exemplo.com"
 $env:ADMIN_EMAIL = "admin@exemplo.com"
 ```
 
-Depois, execute `notificacao_urgencia.LocalRunner` pela IDE. O e-mail gerado pode ser consultado em `http://localhost:4566/_aws/ses`. Para usar uma mensagem real da fila, passe o corpo dela como argumento do `LocalRunner`.
-
-Se a mensagem vier de uma ingestão executada na sua máquina, o horário do e-mail sai 3 horas atrasado, porque `dataEnvio` já estará no horário local. Na AWS, a Lambda de ingestão roda em UTC e o horário fica correto.
+Depois, execute `notificacao_urgencia.LocalRunner` pela IDE. Para usar o corpo de uma mensagem real da fila, passe-o como argumento.

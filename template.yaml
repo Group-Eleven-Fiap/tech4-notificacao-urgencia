@@ -29,11 +29,28 @@ Resources:
         deadLetterTargetArn: !GetAtt FilaNotificacoesCriticasDLQ.Arn
         maxReceiveCount: 3
 
-  PoliticaFilasSomenteTls:
+  # O SQS exige exatamente um recurso por instrução, então cada fila tem a sua política
+  PoliticaFilaSomenteTls:
     Type: AWS::SQS::QueuePolicy
     Properties:
       Queues:
         - !Ref FilaNotificacoesCriticas
+      PolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Sid: NegarAcessoSemTls
+            Effect: Deny
+            Principal: '*'
+            Action: sqs:*
+            Resource: !GetAtt FilaNotificacoesCriticas.Arn
+            Condition:
+              Bool:
+                aws:SecureTransport: 'false'
+
+  PoliticaDlqSomenteTls:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
         - !Ref FilaNotificacoesCriticasDLQ
       PolicyDocument:
         Version: '2012-10-17'
@@ -42,9 +59,7 @@ Resources:
             Effect: Deny
             Principal: '*'
             Action: sqs:*
-            Resource:
-              - !GetAtt FilaNotificacoesCriticas.Arn
-              - !GetAtt FilaNotificacoesCriticasDLQ.Arn
+            Resource: !GetAtt FilaNotificacoesCriticasDLQ.Arn
             Condition:
               Bool:
                 aws:SecureTransport: 'false'

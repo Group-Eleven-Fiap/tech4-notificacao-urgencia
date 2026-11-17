@@ -86,6 +86,14 @@ Resources:
                   - iam:AttachRolePolicy
                   - iam:DetachRolePolicy
                 Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/tech4-*
+              # O API Gateway cria esta role de servico na primeira vez que um stage e criado na conta
+              - Sid: RoleDeServicoApiGateway
+                Effect: Allow
+                Action: iam:CreateServiceLinkedRole
+                Resource: !Sub arn:${AWS::Partition}:iam::${AWS::AccountId}:role/aws-service-role/ops.apigateway.amazonaws.com/AWSServiceRoleForAPIGateway
+                Condition:
+                  StringEquals:
+                    iam:AWSServiceName: ops.apigateway.amazonaws.com
 
 Outputs:
   RoleDeployArn:
